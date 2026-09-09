@@ -72,6 +72,41 @@
   --radius: 0.5rem;
 }
 
+/* Dark immersive scope — used by the /analyze build workspace and /viewer.
+   Wrapping a subtree in `.dark` flips every design token so the existing
+   token-based panels (toolbar, settings, drawers, probe) render dark with no
+   prop threading. The light product pages stay on :root. */
+.dark {
+  color-scheme: dark;
+  --background: #0f1110;
+  --foreground: #e8eae7;
+  --card: #171a18;
+  --card-foreground: #e8eae7;
+  --popover: #171a18;
+  --popover-foreground: #e8eae7;
+
+  --primary: #8fb894;
+  --primary-foreground: #0f1110;
+
+  --secondary: #232723;
+  --secondary-foreground: #e8eae7;
+  --muted: #232723;
+  --muted-foreground: #9aa09b;
+  --accent: #232723;
+  --accent-foreground: #e8eae7;
+
+  --destructive: #c25a4e;
+  --border: #2b2f2c;
+  --input: #2b2f2c;
+  --ring: #8fb894;
+
+  --brand-green: #8fb894;
+  --brand-green-fg: #0f1110;
+  --brand-blue: #7fa0c4;
+  --text-muted: #7c827c;
+  --surface-2: #1d211d;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

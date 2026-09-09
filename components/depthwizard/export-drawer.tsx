@@ -45,7 +45,7 @@ export function ExportDrawer({
           <div>
             <h2 className="text-base font-semibold text-foreground">Export terrain</h2>
             <p className="mt-0.5 font-mono text-[11px] text-text-muted">
-              rgb_2021.tif · 7 artifacts
+              rgb_2021.tif · {ARTIFACTS.length} artifacts
             </p>
           </div>
           <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">

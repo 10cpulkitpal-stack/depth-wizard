@@ -145,6 +145,21 @@ export const ARTIFACTS: Artifact[] = [
     description: 'Textured terrain mesh with structures.',
     size: '8.7 MB',
   },
+  {
+    id: 'dsm-fullres',
+    name: 'Full-Res DSM (GeoTIFF)',
+    format: 'GeoTIFF',
+    description: 'Full-resolution digital surface model, calibrated grid.',
+    size: '12.4 MB',
+  },
+]
+
+export const BUILD_STEPS: { id: string; label: string }[] = [
+  { id: 'decode', label: 'Decode raster' },
+  { id: 'depth', label: 'Estimate relative depth' },
+  { id: 'calibrate', label: 'Calibrate height' },
+  { id: 'terrain', label: 'Build terrain' },
+  { id: 'scene', label: 'Generate 3D scene' },
 ]
 
 export const TECHNICAL_NOTES: TechnicalNote[] = [

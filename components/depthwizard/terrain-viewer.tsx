@@ -19,10 +19,12 @@ import {
 type OrbitControlsImpl = React.ComponentRef<typeof OrbitControls>
 
 export type Quality = 'low' | 'medium' | 'high'
+export type ViewerTheme = 'light' | 'dark'
 
 export interface TerrainControls {
   texture: boolean
   heightColors: boolean
+  dTerrain: boolean
   smooth: boolean
   block: boolean
   buildings: boolean
@@ -48,6 +50,7 @@ export interface ProbeReading {
 export const DEFAULT_CONTROLS: TerrainControls = {
   texture: true,
   heightColors: false,
+  dTerrain: false,
   smooth: true,
   block: false,
   buildings: true,
@@ -62,28 +65,77 @@ export const DEFAULT_CONTROLS: TerrainControls = {
   tourPaused: false,
 }
 
+interface ThemePalette {
+  bg: string
+  fogNear: number
+  fogFar: number
+  gridCell: string
+  gridSection: string
+  hemiSky: string
+  hemiGround: string
+  hemiIntensity: number
+  block: string
+  wire: string
+}
+
+const THEMES: Record<ViewerTheme, ThemePalette> = {
+  light: {
+    bg: '#f2f2ef',
+    fogNear: 24,
+    fogFar: 60,
+    gridCell: '#d3d3cc',
+    gridSection: '#b7b7ad',
+    hemiSky: '#ffffff',
+    hemiGround: '#d8d8d0',
+    hemiIntensity: 1.0,
+    block: '#e7e6e0',
+    wire: '#3f5a45',
+  },
+  dark: {
+    bg: '#0f1110',
+    fogNear: 26,
+    fogFar: 64,
+    gridCell: '#23271f',
+    gridSection: '#333a30',
+    hemiSky: '#cdd4c9',
+    hemiGround: '#20241d',
+    hemiIntensity: 0.85,
+    block: '#1b1f1a',
+    wire: '#8fb894',
+  },
+}
+
 const QUALITY_SEGMENTS: Record<Quality, number> = { low: 96, medium: 150, high: 210 }
 const OVERVIEW = new THREE.Vector3(7.5, 6.5, 9)
+const AERIAL = new THREE.Vector3(0.4, 17, 3.2)
 const SCENE_CENTER = new THREE.Vector3(0, 1, 0)
 
-// ---- height ramp for the "Height Colors" mode -------------------------------
-const RAMP: [number, THREE.Color][] = [
-  [0.0, new THREE.Color('#5c7360')], // low — light green
-  [0.4, new THREE.Color('#8a8a5c')], // medium — olive / earth
-  [0.72, new THREE.Color('#bcab84')], // high — light brown
-  [1.0, new THREE.Color('#e9e5db')], // peaks — neutral
+// ---- height ramps -----------------------------------------------------------
+// warm earth ramp for "Height Colors"
+const RAMP_WARM: [number, THREE.Color][] = [
+  [0.0, new THREE.Color('#5c7360')],
+  [0.4, new THREE.Color('#8a8a5c')],
+  [0.72, new THREE.Color('#bcab84')],
+  [1.0, new THREE.Color('#e9e5db')],
+]
+// cool technical ramp for "D-Terrain" (digital terrain model shading)
+const RAMP_COOL: [number, THREE.Color][] = [
+  [0.0, new THREE.Color('#20303c')],
+  [0.42, new THREE.Color('#2f5f60')],
+  [0.72, new THREE.Color('#5f9e79')],
+  [1.0, new THREE.Color('#dfe4d6')],
 ]
 
-function rampColor(t: number, out: THREE.Color) {
-  for (let i = 0; i < RAMP.length - 1; i++) {
-    const [a, ca] = RAMP[i]
-    const [b, cb] = RAMP[i + 1]
+function rampColor(ramp: [number, THREE.Color][], t: number, out: THREE.Color) {
+  for (let i = 0; i < ramp.length - 1; i++) {
+    const [a, ca] = ramp[i]
+    const [b, cb] = ramp[i + 1]
     if (t <= b) {
       const k = (t - a) / (b - a || 1)
       return out.copy(ca).lerp(cb, Math.max(0, Math.min(1, k)))
     }
   }
-  return out.copy(RAMP[RAMP.length - 1][1])
+  return out.copy(ramp[ramp.length - 1][1])
 }
 
 // ---- terrain surface --------------------------------------------------------
@@ -109,6 +161,8 @@ function TerrainSurface({
     texture.needsUpdate = true
   }, [texture])
 
+  const ramp = controls.dTerrain ? RAMP_COOL : RAMP_WARM
+
   const geometry = useMemo(() => {
     const field = generateTerrain(segments)
     const seg = field.res
@@ -122,7 +176,7 @@ function TerrainSurface({
       const z = pos.getZ(i)
       const t = getElevationNorm(x, z)
       pos.setY(i, t * MAX_HEIGHT)
-      rampColor(t, c)
+      rampColor(ramp, t, c)
       colors[i * 3] = c.r
       colors[i * 3 + 1] = c.g
       colors[i * 3 + 2] = c.b
@@ -130,7 +184,9 @@ function TerrainSurface({
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     g.computeVertexNormals()
     return g
-  }, [segments])
+  }, [segments, ramp])
+
+  const shaded = controls.heightColors || controls.dTerrain
 
   const handleProbe = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
@@ -155,10 +211,10 @@ function TerrainSurface({
       receiveShadow={controls.shadows}
     >
       <meshStandardMaterial
-        map={controls.texture && !controls.heightColors ? texture : null}
-        vertexColors={controls.heightColors}
-        color={controls.heightColors ? '#ffffff' : controls.texture ? '#ffffff' : '#cfd0c8'}
-        roughness={0.92}
+        map={controls.texture && !shaded ? texture : null}
+        vertexColors={shaded}
+        color={shaded ? '#ffffff' : controls.texture ? '#ffffff' : '#cfd0c8'}
+        roughness={controls.dTerrain ? 0.75 : 0.92}
         metalness={0}
         flatShading={!controls.smooth}
         wireframe={controls.wireframe}
@@ -169,7 +225,15 @@ function TerrainSurface({
 }
 
 // ---- subtle wireframe overlay on top of the textured surface ----------------
-function WireOverlay({ segments, relief }: { segments: number; relief: number }) {
+function WireOverlay({
+  segments,
+  relief,
+  color,
+}: {
+  segments: number
+  relief: number
+  color: string
+}) {
   const geometry = useMemo(() => {
     const g = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, segments - 1, segments - 1)
     g.rotateX(-Math.PI / 2)
@@ -181,23 +245,31 @@ function WireOverlay({ segments, relief }: { segments: number; relief: number })
   }, [segments])
   return (
     <mesh geometry={geometry} scale-y={relief}>
-      <meshBasicMaterial color="#3f5a45" wireframe transparent opacity={0.14} />
+      <meshBasicMaterial color={color} wireframe transparent opacity={0.16} />
     </mesh>
   )
 }
 
 // ---- solid block skirt for "3D Block" mode ----------------------------------
-function TerrainBlock({ relief }: { relief: number }) {
+function TerrainBlock({ relief, color }: { relief: number; color: string }) {
   return (
     <mesh position={[0, -0.9 * relief, 0]}>
       <boxGeometry args={[TERRAIN_SIZE, 1.8 * relief, TERRAIN_SIZE]} />
-      <meshStandardMaterial color="#e7e6e0" roughness={1} metalness={0} />
+      <meshStandardMaterial color={color} roughness={1} metalness={0} />
     </mesh>
   )
 }
 
 // ---- building volumes -------------------------------------------------------
-function Buildings({ relief, shadows }: { relief: number; shadows: boolean }) {
+function Buildings({
+  relief,
+  shadows,
+  color,
+}: {
+  relief: number
+  shadows: boolean
+  color: string
+}) {
   const specs = useMemo(() => getBuildingData(), [])
   return (
     <group>
@@ -211,7 +283,7 @@ function Buildings({ relief, shadows }: { relief: number; shadows: boolean }) {
           receiveShadow={shadows}
         >
           <boxGeometry args={[b.w, b.h, b.d]} />
-          <meshStandardMaterial color="#f4f3ef" roughness={0.7} metalness={0} />
+          <meshStandardMaterial color={color} roughness={0.7} metalness={0} />
         </mesh>
       ))}
     </group>
@@ -224,11 +296,11 @@ function ProbeMarker({ point }: { point: THREE.Vector3 | null }) {
     <group position={point}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.09, 0.13, 32]} />
-        <meshBasicMaterial color="#b4453a" side={THREE.DoubleSide} />
+        <meshBasicMaterial color="#d8695c" side={THREE.DoubleSide} />
       </mesh>
       <mesh position={[0, 0.5, 0]}>
         <cylinderGeometry args={[0.006, 0.006, 1, 8]} />
-        <meshBasicMaterial color="#b4453a" />
+        <meshBasicMaterial color="#d8695c" />
       </mesh>
     </group>
   )
@@ -236,13 +308,13 @@ function ProbeMarker({ point }: { point: THREE.Vector3 | null }) {
 
 // ---- cinematic tour keyframes ----------------------------------------------
 const TOUR_KEYS: THREE.Vector3[] = [
-  new THREE.Vector3(0, 12, 0.2), // above the terrain
-  new THREE.Vector3(0, 6, 9), // move toward it
-  new THREE.Vector3(8, 4.5, 4), // fly across
-  new THREE.Vector3(6, 5.5, -6), // orbit an elevated section
-  new THREE.Vector3(-7, 5, -5), // toward the opposite side
-  new THREE.Vector3(-6, 6, 7), // sweep back
-  OVERVIEW.clone(), // return to overview
+  new THREE.Vector3(0, 12, 0.2),
+  new THREE.Vector3(0, 6, 9),
+  new THREE.Vector3(8, 4.5, 4),
+  new THREE.Vector3(6, 5.5, -6),
+  new THREE.Vector3(-7, 5, -5),
+  new THREE.Vector3(-6, 6, 7),
+  OVERVIEW.clone(),
 ]
 const TOUR_DURATION = 26 // seconds
 
@@ -267,7 +339,7 @@ function TourController({
   useFrame((_, delta) => {
     if (!paused) elapsed.current += delta
     const segCount = TOUR_KEYS.length - 1
-    const loop = (elapsed.current % TOUR_DURATION) / TOUR_DURATION // 0..1
+    const loop = (elapsed.current % TOUR_DURATION) / TOUR_DURATION
     const scaled = loop * segCount
     const idx = Math.min(segCount - 1, Math.floor(scaled))
     const k = smoothstep(scaled - idx)
@@ -281,22 +353,28 @@ function TourController({
   return null
 }
 
-// ---- orbit + fly + reset ----------------------------------------------------
+// ---- orbit + fly + reset/aerial --------------------------------------------
 function CameraRig({
   controls,
   controlsRef,
   resetSignal,
+  aerialSignal,
 }: {
   controls: TerrainControls
   controlsRef: React.RefObject<OrbitControlsImpl | null>
   resetSignal: number
+  aerialSignal: number
 }) {
   const { camera } = useThree()
   const mode = controls.cameraMode
   const keys = useRef<Record<string, boolean>>({})
-  const reset = useRef<{ t: number; from: THREE.Vector3; fromTarget: THREE.Vector3 } | null>(null)
+  const anim = useRef<{
+    t: number
+    from: THREE.Vector3
+    fromTarget: THREE.Vector3
+    to: THREE.Vector3
+  } | null>(null)
 
-  // fly-mode keyboard capture
   useEffect(() => {
     if (mode !== 'fly') return
     const down = (e: KeyboardEvent) => (keys.current[e.key.toLowerCase()] = true)
@@ -310,27 +388,39 @@ function CameraRig({
     }
   }, [mode])
 
-  // kick off a smooth camera reset when the signal changes
+  // smooth glide to overview on reset
   useEffect(() => {
     if (resetSignal === 0) return
     const ctrl = controlsRef.current
-    reset.current = {
+    anim.current = {
       t: 0,
       from: camera.position.clone(),
       fromTarget: ctrl ? ctrl.target.clone() : new THREE.Vector3(),
+      to: OVERVIEW.clone(),
     }
   }, [resetSignal, camera, controlsRef])
+
+  // smooth glide to the elevated aerial fly vantage
+  useEffect(() => {
+    if (aerialSignal === 0) return
+    const ctrl = controlsRef.current
+    anim.current = {
+      t: 0,
+      from: camera.position.clone(),
+      fromTarget: ctrl ? ctrl.target.clone() : new THREE.Vector3(),
+      to: AERIAL.clone(),
+    }
+  }, [aerialSignal, camera, controlsRef])
 
   useFrame((_, delta) => {
     const controlsImpl = controlsRef.current
 
-    // animate reset (works regardless of mode)
-    if (reset.current && controlsImpl) {
-      reset.current.t = Math.min(1, reset.current.t + delta * 1.4)
-      const k = smoothstep(reset.current.t)
-      camera.position.copy(reset.current.from).lerp(OVERVIEW, k)
-      controlsImpl.target.copy(reset.current.fromTarget).lerp(SCENE_CENTER, k)
-      if (reset.current.t >= 1) reset.current = null
+    if (anim.current && controlsImpl) {
+      anim.current.t = Math.min(1, anim.current.t + delta * 1.4)
+      const k = smoothstep(anim.current.t)
+      camera.position.copy(anim.current.from).lerp(anim.current.to, k)
+      controlsImpl.target.copy(anim.current.fromTarget).lerp(SCENE_CENTER, k)
+      if (anim.current.t >= 1) anim.current = null
       return
     }
 
@@ -364,7 +454,7 @@ function CameraRig({
       autoRotate={mode === 'orbit' && controls.autoRotate}
       autoRotateSpeed={0.55}
       minDistance={3.5}
-      maxDistance={26}
+      maxDistance={30}
       maxPolarAngle={Math.PI / 2.05}
       makeDefault
     />
@@ -376,11 +466,15 @@ function SceneContents({
   onProbe,
   textureUrl,
   resetSignal,
+  aerialSignal,
+  palette,
 }: {
   controls: TerrainControls
   onProbe?: (r: ProbeReading) => void
   textureUrl: string
   resetSignal: number
+  aerialSignal: number
+  palette: ThemePalette
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const [probeMarker, setProbeMarker] = useState<THREE.Vector3 | null>(null)
@@ -388,9 +482,13 @@ function SceneContents({
 
   return (
     <>
-      <color attach="background" args={['#f2f2ef']} />
-      {controls.atmosphere && <fog attach="fog" args={['#ececea', 24, 60]} />}
-      <hemisphereLight args={['#ffffff', '#d8d8d0', 1.0]} />
+      <color attach="background" args={[palette.bg]} />
+      {controls.atmosphere && (
+        <fog attach="fog" args={[palette.bg, palette.fogNear, palette.fogFar]} />
+      )}
+      <hemisphereLight
+        args={[palette.hemiSky, palette.hemiGround, palette.hemiIntensity]}
+      />
       <directionalLight
         position={[8, 13, 6]}
         intensity={1.35}
@@ -414,11 +512,17 @@ function SceneContents({
           onProbe={onProbe}
           setProbeMarker={setProbeMarker}
         />
-        {controls.wireframe && !controls.heightColors && (
-          <WireOverlay segments={segments} relief={controls.relief} />
+        {controls.wireframe && !controls.heightColors && !controls.dTerrain && (
+          <WireOverlay segments={segments} relief={controls.relief} color={palette.wire} />
         )}
-        {controls.block && <TerrainBlock relief={controls.relief} />}
-        {controls.buildings && <Buildings relief={controls.relief} shadows={controls.shadows} />}
+        {controls.block && <TerrainBlock relief={controls.relief} color={palette.block} />}
+        {controls.buildings && (
+          <Buildings
+            relief={controls.relief}
+            shadows={controls.shadows}
+            color={palette.block === '#1b1f1a' ? '#c9ccc2' : '#f4f3ef'}
+          />
+        )}
         {onProbe && <ProbeMarker point={probeMarker} />}
       </Suspense>
 
@@ -427,10 +531,10 @@ function SceneContents({
           args={[TERRAIN_SIZE * 2, TERRAIN_SIZE * 2]}
           cellSize={0.5}
           cellThickness={0.5}
-          cellColor="#d3d3cc"
+          cellColor={palette.gridCell}
           sectionSize={2.5}
           sectionThickness={1}
-          sectionColor="#b7b7ad"
+          sectionColor={palette.gridSection}
           fadeDistance={34}
           fadeStrength={1.2}
           position={[0, -0.02, 0]}
@@ -438,7 +542,12 @@ function SceneContents({
         />
       )}
 
-      <CameraRig controls={controls} controlsRef={controlsRef} resetSignal={resetSignal} />
+      <CameraRig
+        controls={controls}
+        controlsRef={controlsRef}
+        resetSignal={resetSignal}
+        aerialSignal={aerialSignal}
+      />
       {controls.cameraMode === 'tour' && (
         <TourController paused={controls.tourPaused} controlsRef={controlsRef} />
       )}
@@ -453,6 +562,8 @@ export function TerrainViewer({
   textureUrl = '/textures/satellite.png',
   interactive = true,
   resetSignal = 0,
+  aerialSignal = 0,
+  theme = 'light',
 }: {
   controls?: TerrainControls
   onProbe?: (r: ProbeReading) => void
@@ -460,15 +571,18 @@ export function TerrainViewer({
   textureUrl?: string
   interactive?: boolean
   resetSignal?: number
+  aerialSignal?: number
+  theme?: ViewerTheme
 }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+  const palette = THEMES[theme]
 
   if (!mounted) {
     return (
       <div
         className={className}
-        style={{ width: '100%', height: '100%', background: '#f2f2ef' }}
+        style={{ width: '100%', height: '100%', background: palette.bg }}
       />
     )
   }
@@ -487,6 +601,8 @@ export function TerrainViewer({
           onProbe={onProbe}
           textureUrl={textureUrl}
           resetSignal={resetSignal}
+          aerialSignal={aerialSignal}
+          palette={palette}
         />
       </Canvas>
     </div>

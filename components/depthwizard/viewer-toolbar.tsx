@@ -6,6 +6,7 @@ import {
   Grid2x2,
   Image as ImageIcon,
   Layers,
+  Mountain,
   Orbit,
   Palette,
   Route,
@@ -18,13 +19,21 @@ import type { TerrainControls } from './terrain-viewer'
 
 type ToggleKey = keyof Pick<
   TerrainControls,
-  'texture' | 'heightColors' | 'smooth' | 'block' | 'buildings' | 'wireframe' | 'grid'
+  | 'texture'
+  | 'heightColors'
+  | 'dTerrain'
+  | 'smooth'
+  | 'block'
+  | 'buildings'
+  | 'wireframe'
+  | 'grid'
 >
 
 const DISPLAY: { key: ToggleKey; label: string; icon: LucideIcon }[] = [
   { key: 'texture', label: 'RGB Texture', icon: ImageIcon },
   { key: 'heightColors', label: 'Height Colors', icon: Palette },
-  { key: 'smooth', label: 'Smooth', icon: Spline },
+  { key: 'dTerrain', label: 'D-Terrain', icon: Mountain },
+  { key: 'smooth', label: 'Smooth Balanced', icon: Spline },
   { key: 'block', label: '3D Block', icon: Box },
   { key: 'buildings', label: 'Buildings', icon: Building2 },
   { key: 'wireframe', label: 'Wireframe', icon: Layers },
