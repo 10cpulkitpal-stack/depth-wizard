@@ -3,17 +3,15 @@ import { ArrowRight, Play } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { SiteHeader } from '@/components/depthwizard/site-header'
-import { TerrainViewer, type TerrainControls } from '@/components/depthwizard/terrain-viewer'
+import {
+  TerrainViewer,
+  DEFAULT_CONTROLS,
+  type TerrainControls,
+} from '@/components/depthwizard/terrain-viewer'
 
 const HERO_CONTROLS: TerrainControls = {
-  texture: true,
-  heightColors: false,
-  smooth: true,
-  block: false,
-  buildings: true,
-  wireframe: false,
-  grid: true,
-  relief: 1.5,
+  ...DEFAULT_CONTROLS,
+  grid: false,
   cameraMode: 'tour',
 }
 

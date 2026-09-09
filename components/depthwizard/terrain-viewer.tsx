@@ -4,9 +4,21 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Grid, OrbitControls, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
+import {
+  TERRAIN_SIZE,
+  MAX_HEIGHT,
+  METRIC_RANGE,
+  generateTerrain,
+  getBuildingData,
+  getElevation,
+  getElevationNorm,
+  getSlope,
+} from '@/lib/mock-terrain'
 
 // drei's OrbitControls ref type — exposes the target vector we nudge in fly mode.
 type OrbitControlsImpl = React.ComponentRef<typeof OrbitControls>
+
+export type Quality = 'low' | 'medium' | 'high'
 
 export interface TerrainControls {
   texture: boolean
@@ -18,6 +30,12 @@ export interface TerrainControls {
   grid: boolean
   relief: number
   cameraMode: 'orbit' | 'fly' | 'tour'
+  // scene settings
+  shadows: boolean
+  atmosphere: boolean
+  autoRotate: boolean
+  quality: Quality
+  tourPaused: boolean
 }
 
 export interface ProbeReading {
@@ -37,20 +55,23 @@ export const DEFAULT_CONTROLS: TerrainControls = {
   grid: true,
   relief: 1.5,
   cameraMode: 'orbit',
+  shadows: true,
+  atmosphere: true,
+  autoRotate: false,
+  quality: 'medium',
+  tourPaused: false,
 }
 
-const TERRAIN_SIZE = 10
-const SEGMENTS = 200
-const MAX_HEIGHT = 1.7
-const METRIC_RANGE = 140 // meters mapped across full relative depth range
+const QUALITY_SEGMENTS: Record<Quality, number> = { low: 96, medium: 150, high: 210 }
+const OVERVIEW = new THREE.Vector3(7.5, 6.5, 9)
+const SCENE_CENTER = new THREE.Vector3(0, 1, 0)
 
 // ---- height ramp for the "Height Colors" mode -------------------------------
 const RAMP: [number, THREE.Color][] = [
-  [0.0, new THREE.Color('#3a5a6b')],
-  [0.32, new THREE.Color('#5c7360')],
-  [0.55, new THREE.Color('#8a8a5c')],
-  [0.78, new THREE.Color('#bcab84')],
-  [1.0, new THREE.Color('#e9e5db')],
+  [0.0, new THREE.Color('#5c7360')], // low — light green
+  [0.4, new THREE.Color('#8a8a5c')], // medium — olive / earth
+  [0.72, new THREE.Color('#bcab84')], // high — light brown
+  [1.0, new THREE.Color('#e9e5db')], // peaks — neutral
 ]
 
 function rampColor(t: number, out: THREE.Color) {
@@ -65,62 +86,15 @@ function rampColor(t: number, out: THREE.Color) {
   return out.copy(RAMP[RAMP.length - 1][1])
 }
 
-// ---- heightfield sampled from the depth image -------------------------------
-function useHeightfield(url: string, seg: number) {
-  const [heights, setHeights] = useState<Float32Array | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = seg
-      canvas.height = seg
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })
-      if (!ctx) return
-      ctx.drawImage(img, 0, 0, seg, seg)
-      const { data } = ctx.getImageData(0, 0, seg, seg)
-      const h = new Float32Array(seg * seg)
-      for (let i = 0; i < seg * seg; i++) h[i] = data[i * 4] / 255
-      // light smoothing pass for a cleaner architectural surface
-      const s = new Float32Array(h)
-      for (let y = 1; y < seg - 1; y++) {
-        for (let x = 1; x < seg - 1; x++) {
-          const idx = y * seg + x
-          s[idx] =
-            (h[idx] * 4 +
-              h[idx - 1] +
-              h[idx + 1] +
-              h[idx - seg] +
-              h[idx + seg]) /
-            8
-        }
-      }
-      if (!cancelled) setHeights(s)
-    }
-    img.src = url
-    return () => {
-      cancelled = true
-    }
-  }, [url, seg])
-  return heights
-}
-
-function sampleHeight(heights: Float32Array, seg: number, nx: number, nz: number) {
-  const x = Math.max(0, Math.min(seg - 1, Math.round(nx * (seg - 1))))
-  const z = Math.max(0, Math.min(seg - 1, Math.round(nz * (seg - 1))))
-  return heights[z * seg + x]
-}
-
 // ---- terrain surface --------------------------------------------------------
 function TerrainSurface({
-  heights,
+  segments,
   controls,
   textureUrl,
   onProbe,
   setProbeMarker,
 }: {
-  heights: Float32Array
+  segments: number
   controls: TerrainControls
   textureUrl: string
   onProbe?: (r: ProbeReading) => void
@@ -136,14 +110,17 @@ function TerrainSurface({
   }, [texture])
 
   const geometry = useMemo(() => {
-    const seg = Math.sqrt(heights.length)
+    const field = generateTerrain(segments)
+    const seg = field.res
     const g = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, seg - 1, seg - 1)
     g.rotateX(-Math.PI / 2)
     const pos = g.attributes.position as THREE.BufferAttribute
     const colors = new Float32Array(pos.count * 3)
     const c = new THREE.Color()
     for (let i = 0; i < pos.count; i++) {
-      const t = heights[i]
+      const x = pos.getX(i)
+      const z = pos.getZ(i)
+      const t = getElevationNorm(x, z)
       pos.setY(i, t * MAX_HEIGHT)
       rampColor(t, c)
       colors[i * 3] = c.r
@@ -153,28 +130,18 @@ function TerrainSurface({
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     g.computeVertexNormals()
     return g
-  }, [heights])
+  }, [segments])
 
   const handleProbe = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     const p = e.point
-    const nx = (p.x + TERRAIN_SIZE / 2) / TERRAIN_SIZE
-    const nz = (p.z + TERRAIN_SIZE / 2) / TERRAIN_SIZE
-    const normalized = MAX_HEIGHT * controls.relief
-      ? p.y / (MAX_HEIGHT * controls.relief)
-      : 0
-    let slope = 0
-    if (e.face) {
-      const n = e.face.normal.clone()
-      n.y /= controls.relief || 1
-      n.normalize()
-      slope = THREE.MathUtils.radToDeg(Math.acos(Math.max(-1, Math.min(1, n.y))))
-    }
-    setProbeMarker(p.clone())
+    const norm = getElevationNorm(p.x, p.z)
+    const slope = getSlope(p.x, p.z)
+    setProbeMarker(new THREE.Vector3(p.x, getElevation(p.x, p.z) * controls.relief, p.z))
     onProbe?.({
-      x: Number((nx * 1024).toFixed(1)),
-      y: Number((nz * 1024).toFixed(1)),
-      elevation: Number((Math.max(0, normalized) * METRIC_RANGE).toFixed(1)),
+      x: Number((((p.x + TERRAIN_SIZE / 2) / TERRAIN_SIZE) * 1024).toFixed(1)),
+      y: Number((((p.z + TERRAIN_SIZE / 2) / TERRAIN_SIZE) * 1024).toFixed(1)),
+      elevation: Number((norm * METRIC_RANGE).toFixed(1)),
       slope: Number(slope.toFixed(1)),
     })
   }
@@ -185,6 +152,7 @@ function TerrainSurface({
       geometry={geometry}
       scale-y={controls.relief}
       onPointerDown={handleProbe}
+      receiveShadow={controls.shadows}
     >
       <meshStandardMaterial
         map={controls.texture && !controls.heightColors ? texture : null}
@@ -200,6 +168,24 @@ function TerrainSurface({
   )
 }
 
+// ---- subtle wireframe overlay on top of the textured surface ----------------
+function WireOverlay({ segments, relief }: { segments: number; relief: number }) {
+  const geometry = useMemo(() => {
+    const g = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, segments - 1, segments - 1)
+    g.rotateX(-Math.PI / 2)
+    const pos = g.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < pos.count; i++) {
+      pos.setY(i, getElevation(pos.getX(i), pos.getZ(i)) + 0.01)
+    }
+    return g
+  }, [segments])
+  return (
+    <mesh geometry={geometry} scale-y={relief}>
+      <meshBasicMaterial color="#3f5a45" wireframe transparent opacity={0.14} />
+    </mesh>
+  )
+}
+
 // ---- solid block skirt for "3D Block" mode ----------------------------------
 function TerrainBlock({ relief }: { relief: number }) {
   return (
@@ -211,50 +197,18 @@ function TerrainBlock({ relief }: { relief: number }) {
 }
 
 // ---- building volumes -------------------------------------------------------
-function Buildings({
-  heights,
-  relief,
-}: {
-  heights: Float32Array
-  relief: number
-}) {
-  const seg = Math.sqrt(heights.length)
-  const specs = useMemo(() => {
-    const out: { x: number; z: number; w: number; d: number; h: number }[] = []
-    let seed = 7
-    const rand = () => {
-      seed = (seed * 9301 + 49297) % 233280
-      return seed / 233280
-    }
-    for (let gx = 0; gx < 5; gx++) {
-      for (let gz = 0; gz < 5; gz++) {
-        if (rand() > 0.72) continue
-        const nx = 0.36 + gx * 0.065 + (rand() - 0.5) * 0.02
-        const nz = 0.36 + gz * 0.065 + (rand() - 0.5) * 0.02
-        out.push({
-          x: (nx - 0.5) * TERRAIN_SIZE,
-          z: (nz - 0.5) * TERRAIN_SIZE,
-          w: 0.22 + rand() * 0.16,
-          d: 0.22 + rand() * 0.16,
-          h: 0.18 + rand() * 0.5,
-        })
-      }
-    }
-    return out.map((b) => {
-      const nx = b.x / TERRAIN_SIZE + 0.5
-      const nz = b.z / TERRAIN_SIZE + 0.5
-      const base = sampleHeight(heights, seg, nx, nz) * MAX_HEIGHT
-      return { ...b, base }
-    })
-  }, [heights, seg])
-
+function Buildings({ relief, shadows }: { relief: number; shadows: boolean }) {
+  const specs = useMemo(() => getBuildingData(), [])
   return (
     <group>
       {specs.map((b, i) => (
         <mesh
           key={i}
           position={[b.x, b.base * relief + (b.h / 2) * relief, b.z]}
+          rotation={[0, b.rot, 0]}
           scale-y={relief}
+          castShadow={shadows}
+          receiveShadow={shadows}
         >
           <boxGeometry args={[b.w, b.h, b.d]} />
           <meshStandardMaterial color="#f4f3ef" roughness={0.7} metalness={0} />
@@ -280,17 +234,69 @@ function ProbeMarker({ point }: { point: THREE.Vector3 | null }) {
   )
 }
 
-// ---- camera behaviour -------------------------------------------------------
-function CameraRig({
-  mode,
+// ---- cinematic tour keyframes ----------------------------------------------
+const TOUR_KEYS: THREE.Vector3[] = [
+  new THREE.Vector3(0, 12, 0.2), // above the terrain
+  new THREE.Vector3(0, 6, 9), // move toward it
+  new THREE.Vector3(8, 4.5, 4), // fly across
+  new THREE.Vector3(6, 5.5, -6), // orbit an elevated section
+  new THREE.Vector3(-7, 5, -5), // toward the opposite side
+  new THREE.Vector3(-6, 6, 7), // sweep back
+  OVERVIEW.clone(), // return to overview
+]
+const TOUR_DURATION = 26 // seconds
+
+function smoothstep(t: number) {
+  return t * t * (3 - 2 * t)
+}
+
+function TourController({
+  paused,
   controlsRef,
 }: {
-  mode: TerrainControls['cameraMode']
+  paused: boolean
   controlsRef: React.RefObject<OrbitControlsImpl | null>
 }) {
   const { camera } = useThree()
-  const keys = useRef<Record<string, boolean>>({})
+  const elapsed = useRef(0)
 
+  useEffect(() => {
+    elapsed.current = 0
+  }, [])
+
+  useFrame((_, delta) => {
+    if (!paused) elapsed.current += delta
+    const segCount = TOUR_KEYS.length - 1
+    const loop = (elapsed.current % TOUR_DURATION) / TOUR_DURATION // 0..1
+    const scaled = loop * segCount
+    const idx = Math.min(segCount - 1, Math.floor(scaled))
+    const k = smoothstep(scaled - idx)
+    const pos = TOUR_KEYS[idx].clone().lerp(TOUR_KEYS[idx + 1], k)
+    camera.position.copy(pos)
+    camera.lookAt(SCENE_CENTER)
+    const controls = controlsRef.current
+    if (controls) controls.target.copy(SCENE_CENTER)
+  })
+
+  return null
+}
+
+// ---- orbit + fly + reset ----------------------------------------------------
+function CameraRig({
+  controls,
+  controlsRef,
+  resetSignal,
+}: {
+  controls: TerrainControls
+  controlsRef: React.RefObject<OrbitControlsImpl | null>
+  resetSignal: number
+}) {
+  const { camera } = useThree()
+  const mode = controls.cameraMode
+  const keys = useRef<Record<string, boolean>>({})
+  const reset = useRef<{ t: number; from: THREE.Vector3; fromTarget: THREE.Vector3 } | null>(null)
+
+  // fly-mode keyboard capture
   useEffect(() => {
     if (mode !== 'fly') return
     const down = (e: KeyboardEvent) => (keys.current[e.key.toLowerCase()] = true)
@@ -304,10 +310,31 @@ function CameraRig({
     }
   }, [mode])
 
+  // kick off a smooth camera reset when the signal changes
+  useEffect(() => {
+    if (resetSignal === 0) return
+    const ctrl = controlsRef.current
+    reset.current = {
+      t: 0,
+      from: camera.position.clone(),
+      fromTarget: ctrl ? ctrl.target.clone() : new THREE.Vector3(),
+    }
+  }, [resetSignal, camera, controlsRef])
+
   useFrame((_, delta) => {
-    if (mode !== 'fly') return
-    const controls = controlsRef.current
-    if (!controls) return
+    const controlsImpl = controlsRef.current
+
+    // animate reset (works regardless of mode)
+    if (reset.current && controlsImpl) {
+      reset.current.t = Math.min(1, reset.current.t + delta * 1.4)
+      const k = smoothstep(reset.current.t)
+      camera.position.copy(reset.current.from).lerp(OVERVIEW, k)
+      controlsImpl.target.copy(reset.current.fromTarget).lerp(SCENE_CENTER, k)
+      if (reset.current.t >= 1) reset.current = null
+      return
+    }
+
+    if (mode !== 'fly' || !controlsImpl) return
     const speed = delta * 6
     const forward = new THREE.Vector3()
     camera.getWorldDirection(forward)
@@ -324,16 +351,17 @@ function CameraRig({
     if (move.lengthSq() > 0) {
       move.normalize().multiplyScalar(speed)
       camera.position.add(move)
-      controls.target.add(move)
+      controlsImpl.target.add(move)
     }
   })
 
   return (
     <OrbitControls
       ref={controlsRef}
+      enabled={mode !== 'tour'}
       enableDamping
       dampingFactor={0.08}
-      autoRotate={mode === 'tour'}
+      autoRotate={mode === 'orbit' && controls.autoRotate}
       autoRotateSpeed={0.55}
       minDistance={3.5}
       maxDistance={26}
@@ -346,41 +374,53 @@ function CameraRig({
 function SceneContents({
   controls,
   onProbe,
-  depthUrl,
   textureUrl,
+  resetSignal,
 }: {
   controls: TerrainControls
   onProbe?: (r: ProbeReading) => void
-  depthUrl: string
   textureUrl: string
+  resetSignal: number
 }) {
-  const heights = useHeightfield(depthUrl, SEGMENTS)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const [probeMarker, setProbeMarker] = useState<THREE.Vector3 | null>(null)
+  const segments = QUALITY_SEGMENTS[controls.quality]
 
   return (
     <>
       <color attach="background" args={['#f2f2ef']} />
-      <hemisphereLight args={['#ffffff', '#d8d8d0', 1.05]} />
-      <directionalLight position={[8, 12, 6]} intensity={1.35} />
+      {controls.atmosphere && <fog attach="fog" args={['#ececea', 24, 60]} />}
+      <hemisphereLight args={['#ffffff', '#d8d8d0', 1.0]} />
+      <directionalLight
+        position={[8, 13, 6]}
+        intensity={1.35}
+        castShadow={controls.shadows}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-near={0.5}
+        shadow-camera-far={40}
+        shadow-camera-left={-9}
+        shadow-camera-right={9}
+        shadow-camera-top={9}
+        shadow-camera-bottom={-9}
+        shadow-bias={-0.0004}
+      />
       <directionalLight position={[-6, 5, -8]} intensity={0.35} />
 
-      {heights && (
-        <Suspense fallback={null}>
-          <TerrainSurface
-            heights={heights}
-            controls={controls}
-            textureUrl={textureUrl}
-            onProbe={onProbe}
-            setProbeMarker={setProbeMarker}
-          />
-          {controls.block && <TerrainBlock relief={controls.relief} />}
-          {controls.buildings && (
-            <Buildings heights={heights} relief={controls.relief} />
-          )}
-          {onProbe && <ProbeMarker point={probeMarker} />}
-        </Suspense>
-      )}
+      <Suspense fallback={null}>
+        <TerrainSurface
+          segments={segments}
+          controls={controls}
+          textureUrl={textureUrl}
+          onProbe={onProbe}
+          setProbeMarker={setProbeMarker}
+        />
+        {controls.wireframe && !controls.heightColors && (
+          <WireOverlay segments={segments} relief={controls.relief} />
+        )}
+        {controls.block && <TerrainBlock relief={controls.relief} />}
+        {controls.buildings && <Buildings relief={controls.relief} shadows={controls.shadows} />}
+        {onProbe && <ProbeMarker point={probeMarker} />}
+      </Suspense>
 
       {controls.grid && (
         <Grid
@@ -398,7 +438,10 @@ function SceneContents({
         />
       )}
 
-      <CameraRig mode={controls.cameraMode} controlsRef={controlsRef} />
+      <CameraRig controls={controls} controlsRef={controlsRef} resetSignal={resetSignal} />
+      {controls.cameraMode === 'tour' && (
+        <TourController paused={controls.tourPaused} controlsRef={controlsRef} />
+      )}
     </>
   )
 }
@@ -407,16 +450,16 @@ export function TerrainViewer({
   controls = DEFAULT_CONTROLS,
   onProbe,
   className,
-  depthUrl = '/textures/depth.png',
   textureUrl = '/textures/satellite.png',
   interactive = true,
+  resetSignal = 0,
 }: {
   controls?: TerrainControls
   onProbe?: (r: ProbeReading) => void
   className?: string
-  depthUrl?: string
   textureUrl?: string
   interactive?: boolean
+  resetSignal?: number
 }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
@@ -433,16 +476,17 @@ export function TerrainViewer({
   return (
     <div className={className} style={{ width: '100%', height: '100%' }}>
       <Canvas
+        shadows
         dpr={[1, 2]}
-        camera={{ position: [7.5, 6.5, 9], fov: 42 }}
+        camera={{ position: [OVERVIEW.x, OVERVIEW.y, OVERVIEW.z], fov: 42 }}
         style={{ pointerEvents: interactive ? 'auto' : 'none' }}
         gl={{ antialias: true, preserveDrawingBuffer: true }}
       >
         <SceneContents
           controls={controls}
           onProbe={onProbe}
-          depthUrl={depthUrl}
           textureUrl={textureUrl}
+          resetSignal={resetSignal}
         />
       </Canvas>
     </div>
