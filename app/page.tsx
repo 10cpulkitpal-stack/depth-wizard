@@ -49,12 +49,12 @@ export default function LandingPage() {
                 Upload Satellite Image
                 <ArrowRight />
               </Link>
-              <Link
-                href="/result"
-                className={cn(buttonVariants({ variant: 'outline' }), 'h-11 px-5')}
-              >
-                <Play />
-                Explore Demo
+          <Link
+            href="/viewer"
+            className={cn(buttonVariants({ variant: 'outline' }), 'h-11 px-5')}
+          >
+            <Play />
+            Explore Demo
               </Link>
             </div>
           </div>

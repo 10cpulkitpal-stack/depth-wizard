@@ -32,6 +32,7 @@ export interface TerrainControls {
   grid: boolean
   relief: number
   cameraMode: 'orbit' | 'fly' | 'tour'
+  probe: boolean
   // scene settings
   shadows: boolean
   atmosphere: boolean
@@ -58,6 +59,7 @@ export const DEFAULT_CONTROLS: TerrainControls = {
   grid: true,
   relief: 1.5,
   cameraMode: 'orbit',
+  probe: true,
   shadows: true,
   atmosphere: true,
   autoRotate: false,
@@ -189,6 +191,7 @@ function TerrainSurface({
   const shaded = controls.heightColors || controls.dTerrain
 
   const handleProbe = (e: ThreeEvent<PointerEvent>) => {
+    if (!controls.probe) return
     e.stopPropagation()
     const p = e.point
     const norm = getElevationNorm(p.x, p.z)
