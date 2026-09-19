@@ -118,7 +118,15 @@
 }
 
 @utility label-mono {
-  @apply font-mono text-[11px] uppercase tracking-[0.12em] text-text-muted;
+  @apply font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted;
+}
+
+@utility dw-label {
+  @apply font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-300/70;
+}
+
+@utility dw-status {
+  @apply font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-300/80;
 }
 
 @keyframes dw-fade-up {

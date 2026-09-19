@@ -100,7 +100,7 @@ export default function AnalyzePage() {
         className="absolute inset-0"
       />
 
-      <ViewerTopBar steps={['Satellite', 'Terrain', '3D Viewer']} active={stageActive}>
+      <ViewerTopBar steps={['INPUT / Satellite', 'TERRAIN / Build', 'EXPLORE / 3D Viewer']} active={stageActive}>
         <Link
           href="/"
           title="Cancel"
@@ -139,7 +139,7 @@ export default function AnalyzePage() {
 
       {/* Scene badge */}
       <div className="absolute right-3 top-14 z-20 rounded-lg border border-border bg-card/80 px-3 py-2 shadow-sm backdrop-blur">
-        <p className="label-mono">{scene.demo ? 'Demo terrain' : 'Uploaded scene'}</p>
+        <p className="dw-status">{phase === 'ready' ? 'Analysis / Complete' : phase === 'building' ? 'Terrain / Running' : 'System / Ready'}</p>
         <p className="mt-0.5 max-w-40 truncate font-mono text-[11px] text-foreground">{scene.fileName}</p>
       </div>
     </div>
