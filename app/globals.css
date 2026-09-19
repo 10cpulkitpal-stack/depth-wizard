@@ -6,6 +6,7 @@
 
 @theme inline {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-geist-sans), ui-sans-serif, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   --color-ring: var(--ring);
@@ -40,36 +41,36 @@
 }
 
 :root {
-  color-scheme: light;
-  --background: #f7f7f5;
-  --foreground: #1c1c1a;
-  --card: #ffffff;
-  --card-foreground: #1c1c1a;
-  --popover: #ffffff;
-  --popover-foreground: #1c1c1a;
+  color-scheme: dark;
+  --background: #050606;
+  --foreground: #f4f2ea;
+  --card: #0b0f10;
+  --card-foreground: #f4f2ea;
+  --popover: #0b0f10;
+  --popover-foreground: #f4f2ea;
 
-  --primary: #3f5a45;
-  --primary-foreground: #f7f7f5;
+  --primary: #35d6ff;
+  --primary-foreground: #050606;
 
-  --secondary: #f1f1ee;
-  --secondary-foreground: #1c1c1a;
-  --muted: #f1f1ee;
-  --muted-foreground: #73736d;
-  --accent: #f1f1ee;
-  --accent-foreground: #1c1c1a;
+  --secondary: #111617;
+  --secondary-foreground: #f4f2ea;
+  --muted: #111617;
+  --muted-foreground: #a8aaa5;
+  --accent: #111617;
+  --accent-foreground: #f4f2ea;
 
-  --destructive: #b4453a;
-  --border: #e4e4df;
-  --input: #e4e4df;
-  --ring: #3f5a45;
+  --destructive: #e16f68;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.18);
+  --ring: #35d6ff;
 
-  --brand-green: #3f5a45;
-  --brand-green-fg: #f7f7f5;
-  --brand-blue: #3d5871;
-  --text-muted: #999991;
-  --surface-2: #f1f1ee;
+  --brand-green: #39e6c1;
+  --brand-green-fg: #050606;
+  --brand-blue: #35d6ff;
+  --text-muted: #a8aaa5;
+  --surface-2: #0b0f10;
 
-  --radius: 0.5rem;
+  --radius: 0.25rem;
 }
 
 /* Dark immersive scope — used by the /analyze build workspace and /viewer.
@@ -114,6 +115,10 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-space-grotesk), var(--font-geist-sans), ui-sans-serif, sans-serif;
   }
 }
 
