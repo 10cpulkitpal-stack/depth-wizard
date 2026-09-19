@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'DepthWizard — Satellite to Terrain',
+  title: 'DepthWizard — Turn imagery into terrain',
   description:
-    'Estimate terrain depth from a single RGB satellite image and explore the resulting 2.5D reconstruction in an interactive 3D environment. SIH26175 | ISRO.',
+    'Transform one optical satellite image into measurable terrain, reconstructed structures, and an interactive 3D world.',
   generator: 'v0.app',
 }
 

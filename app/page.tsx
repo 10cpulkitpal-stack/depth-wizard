@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Play } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, Play, ScanLine } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { SiteHeader } from '@/components/depthwizard/site-header'
@@ -13,127 +13,63 @@ const HERO_CONTROLS: TerrainControls = {
   ...DEFAULT_CONTROLS,
   grid: false,
   cameraMode: 'tour',
+  autoRotate: true,
 }
 
-const STEPS = [
-  { index: '01', title: 'Upload', body: 'Provide an RGB satellite image.' },
-  { index: '02', title: 'Analyze', body: 'Estimate relative depth and terrain structure.' },
-  { index: '03', title: 'Explore', body: 'Inspect the reconstruction in 3D.' },
-  { index: '04', title: 'Export', body: 'Download generated terrain artifacts.' },
+const PIPELINE = [
+  { index: '01', label: 'IMAGE', title: 'Start with a single optical image.', body: 'One RGB satellite image is enough to begin.' },
+  { index: '02', label: 'DEPTH', title: 'Reveal the spatial structure.', body: 'DepthWizard estimates the hidden geometry in every pixel.' },
+  { index: '03', label: 'CALIBRATION', title: 'Give the scene meaningful scale.', body: 'Reference information turns relative depth into measurable terrain.' },
+  { index: '04', label: 'TERRAIN', title: 'Reconstruct the surface.', body: 'The depth field becomes a navigable digital elevation model.' },
+  { index: '05', label: 'STRUCTURES', title: 'Build what stands on it.', body: 'Buildings and structures are reconstructed over the terrain.' },
+  { index: '06', label: 'EXPLORE', title: 'Enter the 3D environment.', body: 'Inspect, measure, and export the result in real time.' },
 ]
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#101311] text-[#edf0e9] selection:bg-[#9bc89f] selection:text-[#101311]">
       <SiteHeader />
-
       <main>
-        <section id="product" className="mx-auto max-w-6xl px-6 pt-16 pb-10 md:pt-24">
-          <div className="max-w-3xl">
-            <p className="label-mono">Terrain intelligence · Satellite → Terrain</p>
-            <h1 className="mt-4 text-balance text-4xl font-semibold leading-[1.08] tracking-tight text-foreground md:text-6xl">
-              Turn a satellite image into a navigable terrain scene.
-            </h1>
-            <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground md:text-lg">
-              Estimate terrain depth from a single RGB satellite image and explore the
-              resulting 2.5D reconstruction in an interactive 3D environment.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link
-                href="/analyze"
-                className={cn(
-                  buttonVariants(),
-                  'h-11 bg-brand-green px-5 text-brand-green-fg hover:bg-brand-green/90',
-                )}
-              >
-                Upload Satellite Image
-                <ArrowRight />
-              </Link>
-          <Link
-            href="/viewer"
-            className={cn(buttonVariants({ variant: 'outline' }), 'h-11 px-5')}
-          >
-            <Play />
-            Explore Demo
-              </Link>
-            </div>
-          </div>
-
-          <div className="relative mt-12 overflow-hidden rounded-xl border border-border bg-card">
-            <div className="h-[420px] md:h-[560px]">
-              <TerrainViewer controls={HERO_CONTROLS} />
-            </div>
-            <div className="pointer-events-none absolute left-4 top-4 flex flex-col gap-1">
-              <span className="w-fit rounded-md border border-border bg-card/90 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted backdrop-blur">
-                2.5D reconstruction · relative depth
-              </span>
-            </div>
-            <div className="pointer-events-none absolute bottom-4 right-4 flex gap-2">
-              <span className="rounded-md border border-border bg-card/90 px-2 py-1 font-mono text-[10px] text-text-muted backdrop-blur">
-                rgb_2021.tif
-              </span>
-              <span className="rounded-md border border-border bg-card/90 px-2 py-1 font-mono text-[10px] text-text-muted backdrop-blur">
-                1024 × 1024
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section
-          id="workflow"
-          className="mx-auto max-w-6xl px-6 py-14"
-        >
-          <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
-            {STEPS.map((s) => (
-              <div key={s.index} className="bg-card p-6">
-                <span className="font-mono text-sm text-brand-green">{s.index}</span>
-                <h3 className="mt-3 text-sm font-semibold uppercase tracking-wide text-foreground">
-                  {s.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {s.body}
-                </p>
+        <section className="relative isolate min-h-[calc(100vh-4rem)] overflow-hidden border-b border-white/10">
+          <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_70%_45%,rgba(91,125,94,0.24),transparent_36%),linear-gradient(115deg,#101311_10%,#161d18_100%)]" />
+          <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[1400px] items-center gap-10 px-6 py-16 lg:grid-cols-[0.82fr_1.18fr] lg:px-12 lg:py-20">
+            <div className="relative z-10 max-w-2xl">
+              <div className="mb-10 flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.22em] text-[#9bc89f]"><span className="size-2 rounded-full bg-[#9bc89f] shadow-[0_0_18px_#9bc89f]" /> Satellite intelligence / 01</div>
+              <h1 className="max-w-3xl text-balance text-6xl font-medium leading-[0.92] tracking-[-0.07em] text-[#f4f5ef] sm:text-7xl lg:text-[7.4rem]">Turn one image<br /><span className="text-[#9bc89f]">into a 3D world.</span></h1>
+              <p className="mt-8 max-w-md text-base leading-7 text-[#a7b0a7]">DepthWizard transforms optical imagery into measurable terrain, reconstructed structures, and an interactive 3D environment.</p>
+              <div className="mt-10 flex flex-wrap items-center gap-4">
+                <Link href="/analyze" className={cn(buttonVariants(), 'h-12 rounded-full bg-[#a4cfa7] px-6 text-[#101311] hover:bg-[#c0e1c2]')}><span>Start analysis</span><ArrowRight data-icon="inline-end" /></Link>
+                <Link href="#terrain" className="group flex items-center gap-3 px-2 text-sm text-[#c4ccc3] transition-colors hover:text-white"><span className="flex size-10 items-center justify-center rounded-full border border-white/20 transition-colors group-hover:border-[#9bc89f]"><Play className="size-3 fill-current" /></span>Explore 3D</Link>
               </div>
-            ))}
-          </div>
-        </section>
-
-        <section id="outputs" className="mx-auto max-w-6xl px-6 pb-24">
-          <div className="flex flex-col items-start justify-between gap-6 rounded-xl border border-border bg-card p-8 md:flex-row md:items-center">
-            <div className="max-w-xl">
-              <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-                Built for terrain analysis, not guesswork.
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                DepthWizard produces a heightfield, calibrated DSM, normal map and a
-                textured 3D scene — every output labelled with its basis so relative and
-                metric results are never confused.
-              </p>
+              <div className="mt-20 grid max-w-md grid-cols-3 border-t border-white/15 pt-5 text-[10px] uppercase tracking-[0.16em] text-[#778178]"><span>RGB → DEPTH</span><span className="text-center">2.5D / DSM</span><span className="text-right">ISRO · SIH26175</span></div>
             </div>
-            <Link
-              href="/analyze"
-              className={cn(
-                buttonVariants(),
-                'h-11 shrink-0 bg-brand-green px-5 text-brand-green-fg hover:bg-brand-green/90',
-              )}
-            >
-              Start an analysis
-              <ArrowRight />
-            </Link>
+            <div id="terrain" className="relative h-[480px] overflow-hidden border border-white/10 bg-[#161c18] sm:h-[580px] lg:h-[680px]">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(143,184,148,0.1),transparent_50%)]" />
+              <TerrainViewer theme="dark" controls={HERO_CONTROLS} className="absolute inset-0" />
+              <div className="pointer-events-none absolute left-5 top-5 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[#9bc89f]"><ScanLine className="size-3" /> Live reconstruction</div>
+              <div className="pointer-events-none absolute bottom-5 left-5 right-5 flex justify-between border-t border-white/15 pt-3 font-mono text-[10px] text-[#758077]"><span>LAT 28.6139° N</span><span>DEPTH FIELD / 04.82</span></div>
+            </div>
+          </div>
+          <a href="#story" className="absolute bottom-7 left-1/2 hidden -translate-x-1/2 items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-[#778178] md:flex">Scroll to descend <ArrowDownRight className="size-3" /></a>
+        </section>
+
+        <section id="story" className="mx-auto max-w-[1400px] px-6 py-28 lg:px-12 lg:py-40">
+          <div className="grid gap-14 lg:grid-cols-[0.48fr_1fr]">
+            <div><p className="text-[10px] uppercase tracking-[0.22em] text-[#9bc89f]">From image to space</p><h2 className="mt-5 max-w-sm text-4xl font-medium leading-tight tracking-[-0.05em] sm:text-5xl">A new dimension for every frame.</h2></div>
+            <div className="max-w-2xl lg:pt-10"><p className="text-xl leading-9 text-[#a7b0a7] sm:text-2xl">A satellite image is a starting point, not the final view. DepthWizard translates visual information into spatial information — then gives you the tools to understand what changed.</p><Link href="/analyze" className="mt-8 inline-flex items-center gap-2 text-sm text-[#c4d9c5] hover:text-white">Enter the workspace <ArrowRight className="size-4" /></Link></div>
           </div>
         </section>
-      </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-3 px-6 py-8 sm:flex-row sm:items-center">
-          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-muted">
-            DepthWizard · Satellite → Terrain
-          </p>
-          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-muted">
-            SIH26175 | ISRO
-          </p>
-        </div>
-      </footer>
+        <section id="workflow" className="border-y border-white/10 bg-[#151a17]">
+          <div className="mx-auto max-w-[1400px] px-6 py-24 lg:px-12 lg:py-32"><div className="mb-16 flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="text-[10px] uppercase tracking-[0.22em] text-[#9bc89f]">The reconstruction pipeline</p><h2 className="mt-4 text-4xl font-medium tracking-[-0.05em] sm:text-6xl">Six steps to a world.</h2></div><p className="max-w-xs text-sm leading-6 text-[#7f8a81]">Each stage preserves the story of the source image while adding another layer of spatial understanding.</p></div><div className="grid gap-px border border-white/10 bg-white/10 md:grid-cols-2 lg:grid-cols-3">{PIPELINE.map((step) => <article key={step.index} className="min-h-56 bg-[#151a17] p-6 transition-colors hover:bg-[#1d2720] sm:p-8"><div className="flex items-center justify-between text-[10px] tracking-[0.2em] text-[#9bc89f]"><span>{step.index}</span><span>{step.label}</span></div><h3 className="mt-14 max-w-xs text-xl font-medium leading-snug tracking-[-0.02em]">{step.title}</h3><p className="mt-3 max-w-xs text-sm leading-6 text-[#849087]">{step.body}</p></article>)}</div></div>
+        </section>
+
+        <section id="technology" className="mx-auto max-w-[1400px] px-6 py-28 lg:px-12 lg:py-40"><div className="grid gap-14 lg:grid-cols-2 lg:gap-24"><div><p className="text-[10px] uppercase tracking-[0.22em] text-[#9bc89f]">The technical layer</p><h2 className="mt-5 max-w-xl text-4xl font-medium leading-[1.02] tracking-[-0.06em] sm:text-6xl">Built for terrain analysis, not guesswork.</h2></div><div className="grid gap-8 sm:grid-cols-2"><div className="border-l border-[#9bc89f] pl-5"><p className="font-mono text-xs text-[#9bc89f]">RELATIVE DEPTH</p><p className="mt-4 text-sm leading-6 text-[#8d998f]">Read elevation changes from a single optical source without losing the original context.</p></div><div className="border-l border-[#9bc89f] pl-5"><p className="font-mono text-xs text-[#9bc89f]">MEASURABLE OUTPUTS</p><p className="mt-4 text-sm leading-6 text-[#8d998f]">Produce heightfields, calibrated DSMs, normal maps, and textured scenes ready to explore.</p></div></div></div></section>
+
+        <section className="mx-6 mb-20 border border-[#9bc89f]/40 bg-[#a4cfa7] text-[#101311] lg:mx-12"><div className="flex flex-col gap-10 px-6 py-14 sm:px-12 sm:py-20 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] uppercase tracking-[0.22em] opacity-60">Ready to reconstruct?</p><h2 className="mt-5 max-w-2xl text-5xl font-medium leading-[0.95] tracking-[-0.07em] sm:text-7xl">Bring your image<br />into the world.</h2></div><Link href="/analyze" className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#101311] px-6 text-sm text-[#edf0e9] transition-transform hover:translate-x-1">Start analysis <ArrowRight className="size-4" /></Link></div></section>
+      </main>
+      <footer className="border-t border-white/10 px-6 py-8 lg:px-12"><div className="mx-auto flex max-w-[1400px] flex-col justify-between gap-3 text-[10px] uppercase tracking-[0.18em] text-[#778178] sm:flex-row"><span>DepthWizard / Satellite → Terrain → World</span><span>SIH26175 · ISRO · 2026</span></div></footer>
     </div>
   )
 }
+                        
